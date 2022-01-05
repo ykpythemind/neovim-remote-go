@@ -14,7 +14,9 @@ import (
 
 func main() {
 	var remoteWait string
+	var debug bool
 	flag.StringVar(&remoteWait, "remote-wait", "", "wait remote")
+	flag.BoolVar(&debug, "debug", false, "debug")
 	flag.Parse()
 
 	address := os.Getenv("NVIM_LISTEN_ADDRESS")
@@ -23,7 +25,7 @@ func main() {
 		log.Fatal("missing env NVIM_LISTEN_ADDRESS")
 	}
 
-	runner, err := NewRunner(address, remoteWait)
+	runner, err := NewRunner(address, remoteWait, debug)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -34,7 +36,7 @@ func main() {
 	}
 }
 
-func NewRunner(address string, remoteWait string) (*Runner, error) {
+func NewRunner(address string, remoteWait string, debug bool) (*Runner, error) {
 	nvim, err := nvim.Dial(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s %s", address, err)
@@ -50,6 +52,7 @@ func NewRunner(address string, remoteWait string) (*Runner, error) {
 		nvim:       nvim,
 		remoteWait: remoteWait,
 		waitCount:  0,
+		debug:      debug,
 	}, nil
 }
 
@@ -58,6 +61,7 @@ type Runner struct {
 	remoteWait string // now it is file.
 	// TODO: files string[]
 	waitCount int
+	debug     bool
 	m         sync.Mutex
 }
 
@@ -68,7 +72,9 @@ func (r *Runner) Do() error {
 		return err
 	}
 
-	cmd := fmt.Sprintf("edit %s", r.remoteWait)
+	// TODO: flag.Args() is file list
+	file := r.remoteWait
+	cmd := fmt.Sprintf("edit %s", file)
 	if err := r.nvim.Command(cmd); err != nil {
 		return err
 	}
@@ -85,12 +91,14 @@ func (r *Runner) Do() error {
 		// need to Batch execute???
 
 		r.addWait(+1)
-		if err := r.nvim.Subscribe("BufDelete"); err != nil {
-			return err
-		}
+		// if err := r.nvim.Subscribe("BufDelete"); err != nil {
+		// 	return err
+		// }
 
 		if err := r.nvim.RegisterHandler("BufDelete", func(args ...interface{}) {
-			fmt.Println("received bufdelete!!!!!")
+			if r.debug {
+				fmt.Println("received bufdelete!!!!!")
+			}
 			waitCh <- struct{}{}
 		}); err != nil {
 			return err
