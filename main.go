@@ -112,9 +112,9 @@ func (r *Runner) Do() error {
 			return err
 		}
 
-		if err := r.nvim.Command(fmt.Sprintf(`autocmd VimLeave silent! call rpcnotify(%s, "BufDelete")`, c)); err != nil {
-			return err
-		}
+		// if err := r.nvim.Command(fmt.Sprintf(`autocmd VimLeave silent! call rpcnotify(%s, "BufDelete")`, c)); err != nil {
+		// 	return err
+		// }
 
 		// TODO? self.server.command('autocmd VimLeave * if exists("v:exiting") && v:exiting > 0 | silent! call rpcnotify({}, "Exit", v:exiting) | endif'.format(chanid))
 
