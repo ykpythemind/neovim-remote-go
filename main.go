@@ -16,10 +16,10 @@ import (
 )
 
 func main() {
-	run(os.Args)
+	Run(os.Args...)
 }
 
-func run(args []string) {
+func Run(args ...string) {
 	var remoteWait bool
 	var debug bool
 	var help bool
@@ -37,6 +37,8 @@ neovim-remote
 	}
 
 	address := os.Getenv("NVIM_LISTEN_ADDRESS")
+
+	fmt.Println("address", address)
 
 	runner, err := NewRunner(address, flag.Args(), remoteWait, debug)
 	if err != nil {
@@ -82,6 +84,7 @@ func (r *Runner) Do() error {
 	if err != nil {
 		var e net.Error
 		if errors.As(err, &e) {
+			fmt.Println("neterr")
 			return r.startNewNvim()
 		} else {
 			return fmt.Errorf("failed to dial %s: %w", r.address, err)
