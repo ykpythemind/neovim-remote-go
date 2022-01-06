@@ -18,9 +18,19 @@ import (
 func main() {
 	var remoteWait bool
 	var debug bool
+	var help bool
 	flag.BoolVar(&remoteWait, "remote-wait", false, "wait remote")
 	flag.BoolVar(&debug, "debug", false, "debug")
+	flag.BoolVar(&help, "help", false, "show help")
 	flag.Parse()
+
+	if help {
+		fmt.Println(`
+neovim-remote
+		`)
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
 
 	address := os.Getenv("NVIM_LISTEN_ADDRESS")
 
