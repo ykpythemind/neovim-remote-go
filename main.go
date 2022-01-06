@@ -16,13 +16,17 @@ import (
 )
 
 func main() {
+	run(os.Args)
+}
+
+func run(args []string) {
 	var remoteWait bool
 	var debug bool
 	var help bool
 	flag.BoolVar(&remoteWait, "remote-wait", false, "wait remote")
 	flag.BoolVar(&debug, "debug", false, "debug")
 	flag.BoolVar(&help, "help", false, "show help")
-	flag.Parse()
+	flag.CommandLine.Parse(args[1:])
 
 	if help {
 		fmt.Println(`
