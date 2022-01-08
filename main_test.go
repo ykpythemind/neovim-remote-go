@@ -14,19 +14,140 @@ import (
 	"github.com/creack/pty"
 )
 
-var seededRand *rand.Rand = rand.New(
-	rand.NewSource(time.Now().UnixNano()))
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func newCommand(cmd ...string) *exec.Cmd {
-	c := []string{"-c"}
+func TestOpenFile(t *testing.T) {
+	f, err := os.Create("/tmp/test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
 
-	c = append(c, cmd...)
-	return exec.Command("/bin/sh", c...)
+	err, cmd, outb, _, listenAddress := setup(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ptmx.Close() }() // Best effort.
+	time.Sleep(3 * time.Second)
+
+	t.Log("cmd started")
+
+	t.Logf("try to open file using `neovim-remote`... NVIM_LISTEN_ADDRESS: %s", listenAddress)
+
+	testFile := createTmpFile(t)
+	Run("neovim-remote", testFile) // open file with neovim-remote
+
+	time.Sleep(1 * time.Second)
+
+	t.Log("try to edit file which opened by `neovim-remote`")
+
+	ptmx.Write([]byte("ggifugapiyo"))
+	ptmx.Write([]byte{27}) // ESC
+
+	time.Sleep(100 * time.Millisecond)
+
+	ptmx.Write([]byte{58}) // :
+	ptmx.Write([]byte{'w'})
+	ptmx.Write([]byte{'q'})
+	ptmx.Write([]byte{33}) // !
+	ptmx.Write([]byte{13}) // ENTER
+
+	time.Sleep(100 * time.Millisecond)
+
+	str := outb.String()
+	fmt.Fprint(f, str)
+
+	t.Log("check file...")
+
+	got := readFromTmpFile(t, testFile)
+
+	if got != "fugapiyoTEST\n" {
+		t.Errorf("neovim-remote did not work as expected...? got %s", got)
+	}
 }
+
+/*
+func TestOpenFileWithRemote(t *testing.T) {
+	f, err := os.Create("/tmp/test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	err, cmd, outb, _, listenAddress := setup(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ptmx, err := pty.Start(cmd)
+	// TODO: pty.Open
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ptmx.Close() }() // Best effort.
+	time.Sleep(3 * time.Second)
+
+	t.Log("cmd started")
+
+	t.Logf("try to open file using `neovim-remote`... NVIM_LISTEN_ADDRESS: %s", listenAddress)
+
+	testFile := createTmpFile(t)
+	Run("neovim-remote", "--remote-wait", testFile) // open file with neovim-remote
+
+	time.Sleep(1 * time.Second)
+
+	t.Log("try to edit file which opened by `neovim-remote`")
+
+	ptmx.Write([]byte("ggifugapiyo"))
+	ptmx.Write([]byte{27}) // ESC
+
+	time.Sleep(100 * time.Millisecond)
+
+	ptmx.Write([]byte{58}) // :
+	ptmx.Write([]byte{'w'})
+	ptmx.Write([]byte{'q'})
+	ptmx.Write([]byte{33}) // !
+	ptmx.Write([]byte{13}) // ENTER
+
+	time.Sleep(100 * time.Millisecond)
+
+	str := outb.String()
+	fmt.Fprint(f, str)
+
+	t.Log("check file...")
+
+	got := readFromTmpFile(t, testFile)
+
+	if got != "fugapiyoTEST\n" {
+		t.Errorf("neovim-remote did not work as expected...? got %s", got)
+	}
+}
+*/
 
 func newNvim() *exec.Cmd {
 	// return exec.Command("nvim", "-nu", "NORC", "--headless")
 	return exec.Command("nvim", "-nu", "NORC")
+}
+
+func setup(t *testing.T) (err error, cmd *exec.Cmd, stdout bytes.Buffer, stderr bytes.Buffer, listenAddress string) {
+	r := strconv.Itoa(seededRand.Intn(100000))
+	listenAddress = fmt.Sprintf("/tmp/neovim-remote-test_%s", r)
+	os.Setenv("NVIM_LISTEN_ADDRESS", listenAddress)
+
+	cmd = newNvim()
+	cmd.Env = []string{
+		fmt.Sprintf("NVIM_LISTEN_ADDRESS=%s", listenAddress),
+		"LANG=en_US.UTF-8",
+	}
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	return
 }
 
 func createTmpFile(t *testing.T) (filename string) {
@@ -58,69 +179,4 @@ func readFromTmpFile(t *testing.T, filename string) string {
 	}
 
 	return string(b)
-}
-
-func TestOpenFile(t *testing.T) {
-	f, err := os.Create("/tmp/test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	r := strconv.Itoa(seededRand.Intn(100000))
-	listenAddress := fmt.Sprintf("/tmp/neovim-remote-test_%s", r)
-	os.Setenv("NVIM_LISTEN_ADDRESS", listenAddress)
-
-	cmd := newNvim()
-	cmd.Env = []string{
-		fmt.Sprintf("NVIM_LISTEN_ADDRESS=%s", listenAddress),
-		"LANG=en_US.UTF-8",
-	}
-
-	var outb, errb bytes.Buffer
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
-
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		t.Error(err)
-	}
-	// Make sure to close the pty at the end.
-	defer func() { _ = ptmx.Close() }() // Best effort.
-
-	t.Log("cmd started")
-
-	time.Sleep(3 * time.Second)
-
-	t.Logf("try to open file using `neovim-remote`... NVIM_LISTEN_ADDRESS: %s", listenAddress)
-	testFile := createTmpFile(t)
-	Run("neovim-remote", testFile) // open file with neovim-remote
-
-	time.Sleep(1 * time.Second)
-
-	t.Log("try to edit file which opened by `neovim-remote`")
-
-	ptmx.Write([]byte("ggifugapiyo"))
-	ptmx.Write([]byte{27}) // ESC
-
-	time.Sleep(100 * time.Millisecond)
-
-	ptmx.Write([]byte{58}) // :
-	ptmx.Write([]byte{'w'})
-	ptmx.Write([]byte{'q'})
-	ptmx.Write([]byte{33}) // !
-	ptmx.Write([]byte{13}) // ENTER
-
-	time.Sleep(100 * time.Millisecond)
-
-	str := outb.String()
-	fmt.Fprint(f, str)
-
-	t.Log("check file...")
-
-	got := readFromTmpFile(t, testFile)
-
-	if got != "fugapiyoTEST\n" {
-		t.Errorf("neovim-remote did not work as expected...? got %s", got)
-	}
 }
