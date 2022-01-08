@@ -148,9 +148,7 @@ func (r *Runner) Do() error {
 	}
 
 	if r.waitCount > 0 {
-		if r.debug {
-			fmt.Println("waiting...")
-		}
+		fmt.Println("waiting remote buffer delete...")
 	}
 
 loop:
