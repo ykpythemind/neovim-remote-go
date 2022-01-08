@@ -193,11 +193,6 @@ func (r *Runner) Do() error {
 		// result := []string{""}
 		// result := ""
 		var result interface{}
-		// result = make(map[string]interface{})
-		// result := &cmdEvalExample{}
-		// var result String
-		// b := bytes.NewBuffer([]byte("aaaaaaa"))
-		// dec := msgpack.NewDecoder(b)
 
 		err := nv.Eval(r.option.remoteExpr, &result)
 		if err != nil {
