@@ -47,12 +47,12 @@ func TestOpenFile(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	t.Log("try to edit file which opened by `neovim-remote`")
+	t.Logf("try to edit file %s which opened by `neovim-remote`", testFile)
 
 	ptmx.Write([]byte("ggifugapiyo"))
 	ptmx.Write([]byte{27}) // ESC
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	ptmx.Write([]byte{58}) // :
 	ptmx.Write([]byte{'w'})

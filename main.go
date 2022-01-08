@@ -38,6 +38,7 @@ func Run(out io.Writer, args ...string) {
 	flagset.BoolVar(&debug, "debug", false, "debug")
 	flagset.BoolVar(&help, "help", false, "show help")
 	flagset.Parse(args[1:])
+	nonFlagArgs := flagset.Args()
 
 	if help {
 		fmt.Println(`
@@ -60,7 +61,7 @@ neovim-remote
 		option.servername = servername
 	}
 
-	runner, err := NewRunner(flag.Args(), out, option, debug)
+	runner, err := NewRunner(nonFlagArgs, out, option, debug)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -141,6 +142,7 @@ func (r *Runner) Do() error {
 		}
 
 		if r.wait() {
+			fmt.Println("dowait")
 			// set wait for current buffer
 			_, err := nv.CurrentBuffer()
 			if err != nil {
@@ -208,17 +210,18 @@ func (r *Runner) Do() error {
 
 	if r.waitCount > 0 {
 		fmt.Println("waiting remote buffer delete...")
-	loop:
-		for {
-			select {
-			case <-waitCh:
-				r.addWait(-1)
-			default:
-				// if not wait...
+	}
 
-				if r.waitCount < 1 {
-					break loop
-				}
+loop:
+	for {
+		select {
+		case <-waitCh:
+			r.addWait(-1)
+		default:
+			// if not wait...
+
+			if r.waitCount < 1 {
+				break loop
 			}
 		}
 	}
