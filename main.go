@@ -190,8 +190,6 @@ func (r *Runner) Do() error {
 		// if options.remote_expr == '-':
 		//     options.remote_expr = sys.stdin.read()
 
-		// result := []string{""}
-		// result := ""
 		var result interface{}
 
 		err := nv.Eval(r.option.remoteExpr, &result)
@@ -199,8 +197,10 @@ func (r *Runner) Do() error {
 			return err
 		}
 
+		// TODO: another type...
 		if s, ok := result.(string); ok {
 			fmt.Fprintf(r.out, s)
+			return nil
 		} else {
 			return fmt.Errorf("enexpected Eval result: %+v", result)
 		}
