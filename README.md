@@ -2,8 +2,14 @@
 
 alternative to https://github.com/mhinz/neovim-remote
 
+## Install
+
+
+
+## Usage
+
 ```
-neovim-remote-go --remote-wait go.mod
+neovim-remote --remote-wait go.mod
 ```
 
 ## TODO
