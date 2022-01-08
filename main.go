@@ -28,6 +28,8 @@ func Run(out io.Writer, args ...string) {
 	var noStart bool
 	var help bool
 	var servername string
+	var cc string
+	var c string
 	flagset := flag.NewFlagSet("neovim-remote", flag.ExitOnError)
 
 	flagset.BoolVar(&noStart, "no-start", false, "")
@@ -35,6 +37,8 @@ func Run(out io.Writer, args ...string) {
 	flagset.StringVar(&remoteSend, "remote-send", "", "Send key presses")
 	flagset.StringVar(&remoteExpr, "remote-expr", "", "Evaluate expression and print result in shell.")
 	flagset.StringVar(&servername, "servername", "", "Set the address to be used. This overrides the default \"/tmp/nvimsocket\" and $NVIM_LISTEN_ADDRESS.'")
+	flagset.StringVar(&cc, "cc", "", "Execute a command before every other option.")
+	flagset.StringVar(&c, "c", "", "Execute a command after every other option.")
 	flagset.BoolVar(&debug, "debug", false, "debug")
 	flagset.BoolVar(&help, "help", false, "show help")
 	flagset.Parse(args[1:])
@@ -54,6 +58,8 @@ neovim-remote
 		remoteSend: remoteSend,
 		remoteExpr: remoteExpr,
 		servername: os.Getenv("NVIM_LISTEN_ADDRESS"),
+		beforeExec: cc,
+		afterExec:  c,
 	}
 
 	if servername != "" {
@@ -91,6 +97,8 @@ type Option struct {
 	remoteWait bool
 	remoteSend string
 	remoteExpr string
+	beforeExec string
+	afterExec  string
 }
 
 type Runner struct {
@@ -123,16 +131,18 @@ func (r *Runner) Do() error {
 
 	// TODO: nv.SetClientInfo("neovim-remote-go")
 
-	// TODO: fix
-	if err := nv.Command("split"); err != nil {
-		return err
+	if s := r.option.beforeExec; s != "" {
+		if err := nv.Command(s); err != nil {
+			return err
+		}
 	}
 
 	for i, file := range r.files {
-		editcmd := "edit" // TODO: depends on flag
+		editcmd := "edit" // TODO: another cmd option (tabedit ...)
 
 		if i == 0 {
 			// if first, create new buffer with edit (???)
+			// TODO: fix logic .. original: if started_new_process = True
 			editcmd = "edit"
 		}
 		cmd := fmt.Sprintf("%s %s", editcmd, file)
@@ -208,20 +218,25 @@ func (r *Runner) Do() error {
 		}
 	}
 
-	if r.waitCount > 0 {
-		fmt.Println("waiting remote buffer delete...")
+	if s := r.option.afterExec; s != "" {
+		if err := nv.Command(s); err != nil {
+			return err
+		}
 	}
 
-loop:
-	for {
-		select {
-		case <-waitCh:
-			r.addWait(-1)
-		default:
-			// if not wait...
+	if r.waitCount > 0 {
+		fmt.Println("waiting remote buffer delete...")
+	loop:
+		for {
+			select {
+			case <-waitCh:
+				r.addWait(-1)
+			default:
+				// if not wait...
 
-			if r.waitCount < 1 {
-				break loop
+				if r.waitCount < 1 {
+					break loop
+				}
 			}
 		}
 	}
