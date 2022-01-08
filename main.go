@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -16,17 +17,28 @@ import (
 )
 
 func main() {
-	Run(os.Args...)
+	Run(os.Stdout, os.Args...)
 }
 
-func Run(args ...string) {
+func Run(out io.Writer, args ...string) {
+	var remoteSend string
+	var remoteExpr string
 	var remoteWait bool
 	var debug bool
+	var noStart bool
 	var help bool
-	flag.BoolVar(&remoteWait, "remote-wait", false, "wait remote")
-	flag.BoolVar(&debug, "debug", false, "debug")
-	flag.BoolVar(&help, "help", false, "show help")
-	flag.CommandLine.Parse(args[1:])
+	var servername string
+	flagset := flag.NewFlagSet("neovim-remote", flag.ExitOnError)
+
+	flagset.BoolVar(&noStart, "no-start", false, "")
+	flagset.BoolVar(&remoteWait, "remote-wait", false, "Block until all buffers opened by this option get deleted or the process exits.")
+	flagset.StringVar(&remoteSend, "remote-send", "", "Send key presses")
+	flagset.StringVar(&remoteExpr, "remote-expr", "", "Evaluate expression and print result in shell.")
+	flagset.StringVar(&servername, "servername", "", "Set the address to be used. This overrides the default \"/tmp/nvimsocket\" and $NVIM_LISTEN_ADDRESS.'")
+	flagset.BoolVar(&debug, "debug", false, "debug")
+	flagset.BoolVar(&help, "help", false, "show help")
+	flagset.Parse(args[1:])
+	nonFlagArgs := flagset.Args()
 
 	if help {
 		fmt.Println(`
@@ -36,9 +48,20 @@ neovim-remote
 		os.Exit(0)
 	}
 
-	address := os.Getenv("NVIM_LISTEN_ADDRESS")
+	option := Option{
+		noStart:    noStart,
+		remoteWait: remoteWait,
+		remoteSend: remoteSend,
+		remoteExpr: remoteExpr,
+		servername: os.Getenv("NVIM_LISTEN_ADDRESS"),
+	}
 
-	runner, err := NewRunner(address, flag.Args(), remoteWait, debug)
+	if servername != "" {
+		// override default
+		option.servername = servername
+	}
+
+	runner, err := NewRunner(nonFlagArgs, out, option, debug)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,46 +75,55 @@ neovim-remote
 	}
 }
 
-func NewRunner(address string, files []string, remoteWait bool, debug bool) (*Runner, error) {
+func NewRunner(files []string, out io.Writer, option Option, debug bool) (*Runner, error) {
 	return &Runner{
-		address:    address,
-		remoteWait: remoteWait,
-		files:      files,
-		waitCount:  0,
-		debug:      debug,
+		out:       out,
+		option:    option,
+		files:     files,
+		waitCount: 0,
+		debug:     debug,
 	}, nil
 }
 
-type Runner struct {
-	address    string
+type Option struct {
+	noStart    bool
+	servername string
 	remoteWait bool
-	files      []string
-	waitCount  int
-	debug      bool
-	m          sync.Mutex
+	remoteSend string
+	remoteExpr string
+}
+
+type Runner struct {
+	option    Option
+	out       io.Writer
+	files     []string
+	waitCount int
+	debug     bool
+	m         sync.Mutex
 }
 
 func (r *Runner) Do() error {
 	waitCh := make(chan struct{}, 1)
 
-	if r.address == "" {
+	if r.option.servername == "" {
 		return r.startNewNvim()
 	}
 
-	nv, err := nvim.Dial(r.address)
+	nv, err := nvim.Dial(r.option.servername)
 	if err != nil {
 		var e net.Error
 		if errors.As(err, &e) {
 			fmt.Println("neterr")
 			return r.startNewNvim()
 		} else {
-			return fmt.Errorf("failed to dial %s: %w", r.address, err)
+			return fmt.Errorf("failed to dial %s: %w", r.option.servername, err)
 		}
 	}
 	defer nv.Close()
 
 	// TODO: nv.SetClientInfo("neovim-remote-go")
 
+	// TODO: fix
 	if err := nv.Command("split"); err != nil {
 		return err
 	}
@@ -110,6 +142,7 @@ func (r *Runner) Do() error {
 		}
 
 		if r.wait() {
+			fmt.Println("dowait")
 			// set wait for current buffer
 			_, err := nv.CurrentBuffer()
 			if err != nil {
@@ -144,6 +177,34 @@ func (r *Runner) Do() error {
 			if err := nv.Command("augroup END"); err != nil {
 				return err
 			}
+		}
+	}
+
+	if r.option.remoteSend != "" {
+		_, err := nv.Input(r.option.remoteSend)
+		if err != nil {
+			return err
+		}
+	}
+
+	if r.option.remoteExpr != "" {
+		// TODO:
+		// if options.remote_expr == '-':
+		//     options.remote_expr = sys.stdin.read()
+
+		var result interface{}
+
+		err := nv.Eval(r.option.remoteExpr, &result)
+		if err != nil {
+			return err
+		}
+
+		// TODO: another type...
+		if s, ok := result.(string); ok {
+			fmt.Fprintf(r.out, s)
+			return nil
+		} else {
+			return fmt.Errorf("enexpected Eval result: %+v", result)
 		}
 	}
 
@@ -182,7 +243,7 @@ func (r *Runner) doFilenameEscapedCommand(nv *nvim.Nvim, cmd, path string) error
 }
 
 func (r *Runner) wait() bool {
-	return r.remoteWait == true
+	return r.option.remoteWait
 }
 
 func (r *Runner) addWait(n int) {
@@ -192,11 +253,15 @@ func (r *Runner) addWait(n int) {
 }
 
 func (r *Runner) startNewNvim() error {
+	if r.option.noStart {
+		return nil
+	}
+
 	fmt.Fprintln(os.Stderr, "Starting new nvim process...")
 
 	env := os.Environ()
-	if r.address != "" {
-		env = append(env, fmt.Sprintf("NVIM_LISTEN_ADDRESS=%s", r.address))
+	if r.option.servername != "" {
+		env = append(env, fmt.Sprintf("NVIM_LISTEN_ADDRESS=%s", r.option.servername))
 	}
 
 	binary := os.Getenv("NVIM_CMD")

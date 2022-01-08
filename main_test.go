@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 
@@ -40,16 +41,18 @@ func TestOpenFile(t *testing.T) {
 	t.Logf("try to open file using `neovim-remote`... NVIM_LISTEN_ADDRESS: %s", listenAddress)
 
 	testFile := createTmpFile(t)
-	Run("neovim-remote", testFile) // open file with neovim-remote
+
+	buf := bytes.NewBuffer([]byte(""))
+	Run(buf, "neovim-remote", testFile) // open file with neovim-remote
 
 	time.Sleep(1 * time.Second)
 
-	t.Log("try to edit file which opened by `neovim-remote`")
+	t.Logf("try to edit file %s which opened by `neovim-remote`", testFile)
 
 	ptmx.Write([]byte("ggifugapiyo"))
 	ptmx.Write([]byte{27}) // ESC
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	ptmx.Write([]byte{58}) // :
 	ptmx.Write([]byte{'w'})
@@ -129,24 +132,69 @@ func TestOpenFileWithRemote(t *testing.T) {
 }
 */
 
-func newNvim() *exec.Cmd {
-	// return exec.Command("nvim", "-nu", "NORC", "--headless")
-	return exec.Command("nvim", "-nu", "NORC")
+func TestRemoteSend(t *testing.T) {
+	listenAddress := randomSocket()
+	cmd, _, _ := newNvim(true, listenAddress)
+
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Second)
+
+	buf := bytes.NewBuffer([]byte(""))
+	Run(buf, "neovim-remote", "--no-start", "--remote-send", "iabc<CR><esc>")
+	Run(buf, "neovim-remote", "--no-start", "--remote-expr", "getline(1)")
+
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Error(err)
+	}
+
+	_ = cmd.Wait()
+
+	got := buf.String()
+	want := "abc"
+	if want != got {
+		t.Errorf("result is not expected. want %s, but got %s", want, got)
+	}
 }
 
-func setup(t *testing.T) (err error, cmd *exec.Cmd, stdout bytes.Buffer, stderr bytes.Buffer, listenAddress string) {
-	r := strconv.Itoa(seededRand.Intn(100000))
-	listenAddress = fmt.Sprintf("/tmp/neovim-remote-test_%s", r)
-	os.Setenv("NVIM_LISTEN_ADDRESS", listenAddress)
+func newNvim(headless bool, listenAddress string) (cmd *exec.Cmd, stdout *bytes.Buffer, stderr *bytes.Buffer) {
+	if headless {
+		cmd = exec.Command("nvim", "-nu", "NORC", "--headless")
+	} else {
+		cmd = exec.Command("nvim", "-nu", "NORC")
+	}
 
-	cmd = newNvim()
 	cmd.Env = []string{
 		fmt.Sprintf("NVIM_LISTEN_ADDRESS=%s", listenAddress),
 		"LANG=en_US.UTF-8",
 	}
 
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	os.Setenv("NVIM_LISTEN_ADDRESS", listenAddress)
+
+	stdb := make([]byte, 1024)
+	stdout = bytes.NewBuffer(stdb)
+	stde := make([]byte, 1024)
+	stderr = bytes.NewBuffer(stde)
+
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	return
+}
+
+func randomSocket() string {
+	r := strconv.Itoa(seededRand.Intn(100000))
+	return fmt.Sprintf("/tmp/neovim-remote-test_%s", r)
+}
+
+func setup(t *testing.T) (err error, cmd *exec.Cmd, stdout *bytes.Buffer, stderr *bytes.Buffer, listenAddress string) {
+	listenAddress = randomSocket()
+
+	cmd, o, e := newNvim(false, listenAddress)
+
+	stdout = o
+	stderr = e
 	return
 }
 
