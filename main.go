@@ -38,8 +38,6 @@ neovim-remote
 
 	address := os.Getenv("NVIM_LISTEN_ADDRESS")
 
-	fmt.Println("address", address)
-
 	runner, err := NewRunner(address, flag.Args(), remoteWait, debug)
 	if err != nil {
 		log.Fatal(err)

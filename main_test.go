@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -25,8 +26,38 @@ func newCommand(cmd ...string) *exec.Cmd {
 
 func newNvim() *exec.Cmd {
 	// return exec.Command("nvim", "-nu", "NORC", "--headless")
-	// return exec.Command("nvim", "-nu", "NORC")
-	return exec.Command("nvim", "-nu", "NORC", "--headless")
+	return exec.Command("nvim", "-nu", "NORC")
+}
+
+func createTmpFile(t *testing.T) (filename string) {
+	t.Helper()
+
+	tmpFile, err := ioutil.TempFile("", "tmptest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmpFile.Close()
+
+	tmpFile.WriteString("TEST")
+
+	return tmpFile.Name()
+}
+
+func readFromTmpFile(t *testing.T, filename string) string {
+	t.Helper()
+
+	f, err := os.Open(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(b)
 }
 
 func TestOpenFile(t *testing.T) {
@@ -50,132 +81,46 @@ func TestOpenFile(t *testing.T) {
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 
-	// cherr := make(chan error, 1)
-	// chFile := make(chan *os.File, 1)
-
-	// go func() {
-	// 	cherr <- cmd.Run()
-	// }()
-
 	ptmx, err := pty.Start(cmd)
-	// pty, tty, err := pty.Open(cmd)
 	if err != nil {
 		t.Error(err)
 	}
 	// Make sure to close the pty at the end.
 	defer func() { _ = ptmx.Close() }() // Best effort.
 
-	fmt.Println("wait start cmd...")
-	// ptmx := <-chFile
-	fmt.Println("ptmx started")
+	t.Log("cmd started")
 
 	time.Sleep(3 * time.Second)
 
-	// do something
-	// nv := newCommand("")
-	Run("neovim-remote", "README.md")
+	t.Logf("try to open file using `neovim-remote`... NVIM_LISTEN_ADDRESS: %s", listenAddress)
+	testFile := createTmpFile(t)
+	Run("neovim-remote", testFile) // open file with neovim-remote
 
-	// buf := make([]byte, 1024)
-	ptmx.Write([]byte("ifugafuga"))
-	ptmx.Write([]byte{27}) // ESC
-
-	// // 読み込んで表示
-	// n, err := ptmx.Read(buf)
-	// fmt.Println(string(buf[:n]))
-	// if err != nil {
-	// 	panic(err)
-	// }
-	//
-	// ptmx.Write([]byte(":q!"))
-	//
 	time.Sleep(1 * time.Second)
 
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	t.Log("try to edit file which opened by `neovim-remote`")
 
-	ptmx.Write([]byte("ggifugafuga"))
+	ptmx.Write([]byte("ggifugapiyo"))
+	ptmx.Write([]byte{27}) // ESC
 
-	endgame := time.After(5 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
-	// time.Sleep(1 * time.Second)
+	ptmx.Write([]byte{58}) // :
+	ptmx.Write([]byte{'w'})
+	ptmx.Write([]byte{'q'})
+	ptmx.Write([]byte{33}) // !
+	ptmx.Write([]byte{13}) // ENTER
 
-	// 読み込んで表示
-	buf := make([]byte, 1024)
-	_, err = ptmx.Read(buf)
-	// fmt.Println(string(buf[:n]))
-	if err != nil {
-		panic(err)
-	}
-
-	// n := 0
-
-	select {
-	case <-endgame:
-		fmt.Println("time to stop!")
-
-		// fmt.Println("read")
-		// nn, err := ptmx.Read(buf)
-		// n = nn
-		// if err != nil {
-		// 	panic(err)
-		// }
-
-		// ptmx.Write([]byte{27}) // ESC
-		// ptmx.Write([]byte{58}) // :
-		// ptmx.Write([]byte{'q'})
-		// ptmx.Write([]byte{33}) // !
-		// ptmx.Write([]byte{13}) // ENTER
-
-		ptmx.Write([]byte("%print"))
-		ptmx.Write([]byte{13}) // ENTER
-		ptmx.Write([]byte("q"))
-		ptmx.Write([]byte{33}) // !
-		ptmx.Write([]byte{13}) // ENTER
-
-		// buf := make([]byte, 1024)
-		// n, err := ptmx.Read(buf)
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// fmt.Println(string(buf[:n]))
-
-		time.Sleep(1 * time.Second)
-
-		// if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		// 	t.Error(err)
-		// }
-
-		// if err := ptmx.Close(); err != nil {
-		// 	t.Fatal(err)
-		// }
-
-		// fmt.Println("out", outb.String())
-		// fmt.Println("err", errb.String())
-
-		// case <-ticker.C:
-		// 	fmt.Println("out", outb.String())
-		// 	fmt.Println("err", errb.String())
-	}
-
-	// err = cmd.Wait()
-	// if err != nil {
-	// 	t.Logf("err type %s", reflect.TypeOf(err))
-	// 	if e, ok := err.(*exec.ExitError); ok {
-	// 		fmt.Println("code", e.ExitCode())
-	// 		fmt.Println("stderr", e.Stderr)
-	// 	}
-	//
-	// 	str := outb.String()
-	// 	fmt.Fprint(f, str)
-	// 	fmt.Println("out", str)
-	// 	fmt.Println("err", errb.String())
-	// 	// t.Fatalf("cmd not finish %s", err)
-	// }
-	fmt.Println("finish...")
+	time.Sleep(100 * time.Millisecond)
 
 	str := outb.String()
 	fmt.Fprint(f, str)
-	fmt.Println("out", str)
-	fmt.Println("err", errb.String())
 
+	t.Log("check file...")
+
+	got := readFromTmpFile(t, testFile)
+
+	if got != "fugapiyoTEST\n" {
+		t.Errorf("neovim-remote did not work as expected...? got %s", got)
+	}
 }
