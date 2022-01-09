@@ -22,7 +22,7 @@ see https://github.com/mhinz/neovim-remote/blob/master/README.md
 
 ```.vimrc
 if has('nvim')
-  let $GIT_EDITOR = 'nvr -cc split --remote-wait'
+  let $GIT_EDITOR = 'neovim-remote -cc split --remote-wait'
 endif
 
 autocmd FileType gitcommit,gitrebase,gitconfig set bufhidden=delete
