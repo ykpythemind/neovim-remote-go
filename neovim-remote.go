@@ -48,7 +48,7 @@ neovim-remote
 		os.Exit(0)
 	}
 
-	option := Option{
+	option := option{
 		noStart:    noStart,
 		remoteWait: remoteWait,
 		remoteSend: remoteSend,
@@ -77,8 +77,8 @@ neovim-remote
 	}
 }
 
-func NewRunner(files []string, out io.Writer, option Option, debug bool) (*Runner, error) {
-	return &Runner{
+func NewRunner(files []string, out io.Writer, option option, debug bool) (*runner, error) {
+	return &runner{
 		out:       out,
 		option:    option,
 		files:     files,
@@ -87,7 +87,7 @@ func NewRunner(files []string, out io.Writer, option Option, debug bool) (*Runne
 	}, nil
 }
 
-type Option struct {
+type option struct {
 	noStart    bool
 	servername string
 	remoteWait bool
@@ -97,8 +97,8 @@ type Option struct {
 	afterExec  string
 }
 
-type Runner struct {
-	option    Option
+type runner struct {
+	option
 	out       io.Writer
 	files     []string
 	waitCount int
@@ -106,29 +106,29 @@ type Runner struct {
 	m         sync.Mutex
 }
 
-func (r *Runner) Do() error {
+func (r *runner) Do() error {
 	waitCh := make(chan struct{}, 1)
 	defer close(waitCh)
 
-	if r.option.servername == "" {
+	if r.servername == "" {
 		return r.startNewNvim()
 	}
 
-	nv, err := nvim.Dial(r.option.servername)
+	nv, err := nvim.Dial(r.servername)
 	if err != nil {
 		var e net.Error
 		if errors.As(err, &e) {
 			fmt.Println("neterr")
 			return r.startNewNvim()
 		} else {
-			return fmt.Errorf("failed to dial %s: %w", r.option.servername, err)
+			return fmt.Errorf("failed to dial %s: %w", r.servername, err)
 		}
 	}
 	defer nv.Close()
 
 	// TODO: nv.SetClientInfo("neovim-remote-go")
 
-	if s := r.option.beforeExec; s != "" {
+	if s := r.beforeExec; s != "" {
 		if err := nv.Command(s); err != nil {
 			return err
 		}
@@ -186,21 +186,21 @@ func (r *Runner) Do() error {
 		}
 	}
 
-	if r.option.remoteSend != "" {
-		_, err := nv.Input(r.option.remoteSend)
+	if r.remoteSend != "" {
+		_, err := nv.Input(r.remoteSend)
 		if err != nil {
 			return err
 		}
 	}
 
-	if r.option.remoteExpr != "" {
+	if r.remoteExpr != "" {
 		// TODO:
 		// if options.remote_expr == '-':
 		//     options.remote_expr = sys.stdin.read()
 
 		var result interface{}
 
-		err := nv.Eval(r.option.remoteExpr, &result)
+		err := nv.Eval(r.remoteExpr, &result)
 		if err != nil {
 			return err
 		}
@@ -214,7 +214,7 @@ func (r *Runner) Do() error {
 		}
 	}
 
-	if s := r.option.afterExec; s != "" {
+	if s := r.afterExec; s != "" {
 		if err := nv.Command(s); err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func (r *Runner) Do() error {
 	return nil
 }
 
-func (r *Runner) doFilenameEscapedCommand(nv *nvim.Nvim, cmd, path string) error {
+func (r *runner) doFilenameEscapedCommand(nv *nvim.Nvim, cmd, path string) error {
 	// TODO: escape filename for nvim
 	// path = self.server.funcs.fnameescape(path)
 
@@ -251,11 +251,11 @@ func (r *Runner) doFilenameEscapedCommand(nv *nvim.Nvim, cmd, path string) error
 	return nv.Command(fmt.Sprintf("%s %s", cmd, path))
 }
 
-func (r *Runner) wait() bool {
-	return r.option.remoteWait
+func (r *runner) wait() bool {
+	return r.remoteWait
 }
 
-func (r *Runner) addWait(n int) int {
+func (r *runner) addWait(n int) int {
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.waitCount += n
@@ -263,16 +263,16 @@ func (r *Runner) addWait(n int) int {
 	return r.waitCount
 }
 
-func (r *Runner) startNewNvim() error {
-	if r.option.noStart {
+func (r *runner) startNewNvim() error {
+	if r.noStart {
 		return nil
 	}
 
 	fmt.Fprintln(os.Stderr, "Starting new nvim process...")
 
 	env := os.Environ()
-	if r.option.servername != "" {
-		env = append(env, fmt.Sprintf("NVIM_LISTEN_ADDRESS=%s", r.option.servername))
+	if r.servername != "" {
+		env = append(env, fmt.Sprintf("NVIM_LISTEN_ADDRESS=%s", r.servername))
 	}
 
 	binary := os.Getenv("NVIM_CMD")
