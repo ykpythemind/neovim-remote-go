@@ -284,7 +284,7 @@ func (r *runner) startNewNvim() error {
 		binary = path
 	}
 
-	args := flag.Args()
+	args := r.files // files is nonFlagArgs
 	newArgs := make([]string, len(args)+1)
 	copy(newArgs[1:], args)
 	newArgs[0] = binary
