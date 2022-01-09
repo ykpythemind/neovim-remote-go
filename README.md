@@ -5,6 +5,10 @@ alternative to https://github.com/mhinz/neovim-remote
 ## Install
 
 
+```
+$ go install github.com/ykpythemind/neovim-remote-go/cmd/neovim-remote
+```
+
 
 ## Usage
 

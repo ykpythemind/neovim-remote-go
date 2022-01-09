@@ -1,4 +1,4 @@
-package main
+package neovim_remote
 
 import (
 	"errors"
@@ -15,10 +15,6 @@ import (
 
 	"github.com/neovim/go-client/nvim"
 )
-
-func main() {
-	Run(os.Stdout, os.Args...)
-}
 
 func Run(out io.Writer, args ...string) {
 	var remoteSend string
