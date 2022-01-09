@@ -108,6 +108,7 @@ type Runner struct {
 
 func (r *Runner) Do() error {
 	waitCh := make(chan struct{}, 1)
+	defer close(waitCh)
 
 	if r.option.servername == "" {
 		return r.startNewNvim()
@@ -148,7 +149,6 @@ func (r *Runner) Do() error {
 		}
 
 		if r.wait() {
-			fmt.Println("dowait")
 			// set wait for current buffer
 			_, err := nv.CurrentBuffer()
 			if err != nil {
@@ -226,11 +226,9 @@ func (r *Runner) Do() error {
 		for {
 			select {
 			case <-waitCh:
-				r.addWait(-1)
-			default:
-				// if not wait...
+				now := r.addWait(-1)
 
-				if r.waitCount < 1 {
+				if now < 1 {
 					break loop
 				}
 			}
@@ -257,10 +255,12 @@ func (r *Runner) wait() bool {
 	return r.option.remoteWait
 }
 
-func (r *Runner) addWait(n int) {
+func (r *Runner) addWait(n int) int {
 	r.m.Lock()
+	defer r.m.Unlock()
 	r.waitCount += n
-	r.m.Unlock()
+
+	return r.waitCount
 }
 
 func (r *Runner) startNewNvim() error {
