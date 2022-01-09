@@ -142,8 +142,8 @@ func TestRemoteSend(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	buf := bytes.NewBuffer([]byte(""))
-	Run(buf, "neovim-remote", "--no-start", "--remote-send", "iabc<CR><esc>")
-	Run(buf, "neovim-remote", "--no-start", "--remote-expr", "getline(1)")
+	Run(buf, "neovim-remote", "--nostart", "--remote-send", "iabc<CR><esc>")
+	Run(buf, "neovim-remote", "--nostart", "--remote-expr", "getline(1)")
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Error(err)

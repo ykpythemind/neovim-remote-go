@@ -28,7 +28,7 @@ func Run(out io.Writer, args ...string) {
 	var c string
 	flagset := flag.NewFlagSet("neovim-remote", flag.ExitOnError)
 
-	flagset.BoolVar(&noStart, "no-start", false, "")
+	flagset.BoolVar(&noStart, "nostart", false, "If no process is found, do not start a new one.")
 	flagset.BoolVar(&remoteWait, "remote-wait", false, "Block until all buffers opened by this option get deleted or the process exits.")
 	flagset.StringVar(&remoteSend, "remote-send", "", "Send key presses")
 	flagset.StringVar(&remoteExpr, "remote-expr", "", "Evaluate expression and print result in shell.")
