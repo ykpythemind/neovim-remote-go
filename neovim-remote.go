@@ -279,7 +279,7 @@ func (r *runner) startNewNvim() error {
 	if binary == "" {
 		path, err := exec.LookPath("nvim")
 		if err != nil {
-			return errors.New("Could not find executable path")
+			return err
 		}
 		binary = path
 	}
