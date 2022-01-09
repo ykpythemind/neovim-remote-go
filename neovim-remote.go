@@ -44,7 +44,7 @@ func Run(out io.Writer, args ...string) {
 		fmt.Println(`
 neovim-remote
 		`)
-		flag.PrintDefaults()
+		flagset.PrintDefaults()
 		os.Exit(0)
 	}
 
