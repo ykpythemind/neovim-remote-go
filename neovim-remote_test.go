@@ -1,4 +1,4 @@
-package main
+package neovim_remote
 
 import (
 	"bytes"
