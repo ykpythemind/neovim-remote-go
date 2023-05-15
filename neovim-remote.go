@@ -48,12 +48,21 @@ neovim-remote
 		os.Exit(0)
 	}
 
+	var servernameEnv string
+
+	nvimEnv := os.Getenv("NVIM")
+	if nvimEnv != "" {
+		servernameEnv = nvimEnv
+	} else {
+		servernameEnv = os.Getenv("NVIM_LISTEN_ADDRESS")
+	}
+
 	option := option{
 		noStart:    noStart,
 		remoteWait: remoteWait,
 		remoteSend: remoteSend,
 		remoteExpr: remoteExpr,
-		servername: os.Getenv("NVIM_LISTEN_ADDRESS"),
+		servername: servernameEnv,
 		beforeExec: cc,
 		afterExec:  c,
 	}
