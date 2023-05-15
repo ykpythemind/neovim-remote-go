@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -90,10 +91,19 @@ neovim-remote
 }
 
 func NewRunner(files []string, out io.Writer, option option, debug bool) (*runner, error) {
+	absFiles := make([]string, len(files))
+	for i, file := range files {
+		absPath, err := filepath.Abs(file)
+		if err != nil {
+			fmt.Errorf("failed to find file %s: %w", file, err)
+		}
+		absFiles[i] = absPath
+	}
+
 	return &runner{
 		out:       out,
 		option:    option,
-		files:     files,
+		files:     absFiles,
 		waitCount: 0,
 		debug:     debug,
 	}, nil
