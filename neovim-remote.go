@@ -20,6 +20,7 @@ func Run(out io.Writer, args ...string) {
 	var remoteSend string
 	var remoteExpr string
 	var remoteWait bool
+	var remoteTabWait bool
 	var debug bool
 	var noStart bool
 	var help bool
@@ -30,6 +31,7 @@ func Run(out io.Writer, args ...string) {
 
 	flagset.BoolVar(&noStart, "nostart", false, "If no process is found, do not start a new one.")
 	flagset.BoolVar(&remoteWait, "remote-wait", false, "Block until all buffers opened by this option get deleted or the process exits.")
+	flagset.BoolVar(&remoteTabWait, "remote-tab-wait", false, "Use :tabedit instead of :edit in --remote-wait.")
 	flagset.StringVar(&remoteSend, "remote-send", "", "Send key presses")
 	flagset.StringVar(&remoteExpr, "remote-expr", "", "Evaluate expression and print result in shell.")
 	flagset.StringVar(&servername, "servername", "", "Set the address to be used. This overrides the default \"/tmp/nvimsocket\" and $NVIM_LISTEN_ADDRESS.'")
@@ -58,13 +60,14 @@ neovim-remote
 	}
 
 	option := option{
-		noStart:    noStart,
-		remoteWait: remoteWait,
-		remoteSend: remoteSend,
-		remoteExpr: remoteExpr,
-		servername: servernameEnv,
-		beforeExec: cc,
-		afterExec:  c,
+		noStart:       noStart,
+		remoteWait:    remoteWait,
+		remoteTabWait: remoteTabWait,
+		remoteSend:    remoteSend,
+		remoteExpr:    remoteExpr,
+		servername:    servernameEnv,
+		beforeExec:    cc,
+		afterExec:     c,
 	}
 
 	if servername != "" {
@@ -97,13 +100,14 @@ func NewRunner(files []string, out io.Writer, option option, debug bool) (*runne
 }
 
 type option struct {
-	noStart    bool
-	servername string
-	remoteWait bool
-	remoteSend string
-	remoteExpr string
-	beforeExec string
-	afterExec  string
+	noStart       bool
+	servername    string
+	remoteWait    bool
+	remoteTabWait bool
+	remoteSend    string
+	remoteExpr    string
+	beforeExec    string
+	afterExec     string
 }
 
 type runner struct {
@@ -144,13 +148,18 @@ func (r *runner) Do() error {
 	}
 
 	for i, file := range r.files {
-		editcmd := "edit" // TODO: another cmd option (tabedit ...)
+		editcmd := "edit"
 
 		if i == 0 {
 			// if first, create new buffer with edit (???)
 			// TODO: fix logic .. original: if started_new_process = True
 			editcmd = "edit"
 		}
+
+		if r.remoteTabWait {
+			editcmd = "tabedit"
+		}
+
 		cmd := fmt.Sprintf("%s %s", editcmd, file)
 
 		if err := nv.Command(cmd); err != nil {
